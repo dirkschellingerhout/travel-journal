@@ -1,0 +1,11 @@
+{
+  "name": "Travel Journal",
+  "short_name": "Travel Journal",
+  "description": "A personal travel journal with weather, photographs and memories.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f4ee",
+  "theme_color": "#172b25",
+  "icons": []
+}
