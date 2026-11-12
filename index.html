@@ -37,7 +37,7 @@
     <div class="stats"><div class="card stat"><small>Destinations</small><b id="insPlaces">0</b></div><div class="card stat"><small>Recorded visits</small><b id="insVisits">0</b></div><div class="card stat"><small>Photographs</small><b id="insPhotos">0</b></div></div>
     <div class="card visit"><h3>Travel archive</h3><p id="insSummary" class="muted">Your travel statistics will appear here once you add some places and visits.</p><div id="insTags" class="tags"></div></div>
   </div>
-  <div class="footer">Weather by Open-Meteo · Your journal and photos stay on this device · Export backups regularly</div>
+  <div class="footer">Travel Journal v<span id="appVersion">1.0.3</span> · Weather by Open-Meteo · Your journal and photos stay on this device · Export backups regularly</div>
 </div>
 
 <div class="modal" id="placeModal"><div class="dialog"><div class="dialoghead"><h2>Add a destination</h2><button class="btn" data-close="placeModal">✕</button></div><p class="muted">Search for a town, village or landmark. Choose the matching result to add it to your journal.</p><div class="searchrow"><input id="placeSearch" placeholder="e.g. Nafplio, Greece" autocomplete="off"><button class="btn primary" id="searchPlaces">Search</button></div><div id="searchResults" class="results"></div></div></div>
@@ -54,14 +54,15 @@
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-const DB_NAME='travel-journal-v1', DB_VERSION=1; let db, locations=[], visits=[], selectedId=null, weatherCache={}, currentWeather=null, installPrompt=null;
+const APP_VERSION='1.0.3'; const DB_NAME='travel-journal-v1', DB_VERSION=1; let db, dbReady, locations=[], visits=[], selectedId=null, weatherCache={}, currentWeather=null, installPrompt=null;
 const today=()=>{const d=new Date();return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');};
 const id=()=>crypto.randomUUID?crypto.randomUUID():Date.now().toString(36)+Math.random().toString(36).slice(2);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function openDB(){return new Promise((resolve,reject)=>{const req=indexedDB.open(DB_NAME,DB_VERSION);req.onupgradeneeded=()=>{const d=req.result;d.createObjectStore('locations',{keyPath:'id'});d.createObjectStore('visits',{keyPath:'id'});d.createObjectStore('weather',{keyPath:'id'});};req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
-function all(store){return new Promise((resolve,reject)=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
-function put(store,obj){return new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(obj);t.oncomplete=()=>resolve(obj);t.onerror=()=>reject(t.error);});}
-function del(store,key){return new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).delete(key);t.oncomplete=resolve;t.onerror=()=>reject(t.error);});}
+async function ensureDB(){if(db)return Promise.resolve(db);if(!dbReady)dbReady=openDB().then(value=>(db=value));return dbReady;}
+function all(store){await ensureDB();return new Promise((resolve,reject)=>{const r=db.transaction(store).objectStore(store).getAll();r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}
+async function put(store,obj){await ensureDB();return new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(obj);t.oncomplete=()=>resolve(obj);t.onerror=()=>reject(t.error);});}
+async function del(store,key){await ensureDB();return new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).delete(key);t.oncomplete=resolve;t.onerror=()=>reject(t.error);});}
 function toast(msg){const el=$('#toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),2600);}
 function showModal(id){$('#'+id).classList.add('open');}function closeModal(id){$('#'+id).classList.remove('open');}
 function cardinal(deg){if(deg==null)return '—';return ['N','NE','E','SE','S','SW','W','NW'][Math.round(deg/45)%8];}
@@ -98,6 +99,6 @@ $('#exportBtn').onclick=async()=>{const data={format:'travel-journal-backup',ver
 $('#importBtn').onclick=()=>$('#importFile').click();$('#importFile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const data=JSON.parse(await f.text());if(data.format!=='travel-journal-backup'||!Array.isArray(data.locations)||!Array.isArray(data.visits))throw Error('This does not look like a Travel Journal backup.');if(!confirm('Import '+data.locations.length+' places and '+data.visits.length+' memories? Existing records with matching IDs will be replaced.'))return;for(const p of data.locations)await put('locations',p);for(const v of data.visits)await put('visits',v);await load();toast('Backup imported.');}catch(err){alert('Import failed: '+err.message);}e.target.value='';};
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installPrompt=e;const b=document.createElement('button');b.className='btn';b.textContent='Install app';b.onclick=async()=>{installPrompt.prompt();await installPrompt.userChoice;installPrompt=null;b.remove();};$('.actions').prepend(b);});
 if('serviceWorker'in navigator&&location.protocol!=='file:')window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
-(async()=>{try{db=await openDB();await load();}catch(e){console.error(e);toast('Local storage could not be opened.');}})();
+(async()=>{try{await ensureDB();await load();}catch(e){console.error('Travel Journal startup failed',e);toast('Local storage could not be opened: '+(e?.message||'unknown error'));}})();
 </script>
 </body></html>
